@@ -1,3 +1,26 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.hover\:underline {
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+/* Custom focus styles for better accessibility */
+input:focus {
+    outline: 2px solid rgba(59, 130, 246, 0.5);
+    outline-offset: -1px;
+}
+
+/* Ensure smooth transitions */
+.transition {
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+}
+
+/* Custom button loading state */
+button:disabled {
+    cursor: not-allowed;
+}

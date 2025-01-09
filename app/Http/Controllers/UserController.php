@@ -18,40 +18,6 @@ class UserController extends Controller
         $this->middleware('auth')->except(['login', 'lupaPassword', 'konfirmPassword', 'sendResetLink', 'updateResetPassword']);
     }
 
-
-    /**
-     * Handle login
-     */
-    public function login(Request $request)
-    {
-        $credentials = $request->validate([
-            'username' => 'required',
-            'password' => 'required'
-        ]);
-
-        if (Auth::attempt($credentials)) {
-            $user = User::find(Auth::id());
-            $user->update([
-                'terakhir_login' => now()->format('d-m-Y H:i:s')
-            ]);
-
-            return redirect()->intended('users');
-        }
-
-        return back()->withErrors([
-            'username' => 'Username atau password salah.',
-        ]);
-    }
-
-    /**
-     * Handle logout
-     */
-    public function logout()
-    {
-        Auth::logout();
-        return redirect('/');
-    }
-
     /**
      * Display dashboard/beranda
      */

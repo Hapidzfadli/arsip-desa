@@ -1,0 +1,44 @@
+/* Sidebar transitions */
+.sidebar-enter-active,
+.sidebar-leave-active {
+    transition: transform 0.3s ease-in-out;
+}
+
+.sidebar-enter-from,
+.sidebar-leave-to {
+    transform: translateX(-100%);
+}
+
+/* Sidebar backdrop */
+.sidebar-backdrop {
+    background-color: rgba(0, 0, 0, 0.5);
+    transition: opacity 0.3s ease-in-out;
+}
+
+/* Hover effects */
+.sidebar-link-hover {
+    transition: all 0.2s ease-in-out;
+}
+
+.sidebar-link-hover:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Custom scrollbar for sidebar */
+.sidebar-content {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.sidebar-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+}

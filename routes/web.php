@@ -25,18 +25,10 @@ Route::get('/', function () {
     return Inertia::render('Auth/Login');
 })->middleware('guest')->name('login');
 
-// Authentication routes
-Route::post('/login', [UserController::class, 'login'])->name('login.post');
-Route::post('/logout', [UserController::class, 'logout'])->name('logout');
-Route::get('/lupa-password', [UserController::class, 'lupaPassword'])->name('password.request');
-Route::post('/lupa-password', [UserController::class, 'sendResetLink'])->name('password.email');
-Route::get('/reset-password/{token}/{username}', [UserController::class, 'konfirmPassword'])->name('password.reset');
-Route::post('/reset-password', [UserController::class, 'updateResetPassword'])->name('password.update');
-
 // Protected routes
 Route::middleware(['auth'])->group(function () {
     // Dashboard/Beranda
-    Route::get('/users', [UserController::class, 'index'])->name('users.index');
+    Route::get('/beranda', [UserController::class, 'index'])->name('users.index');
 
     // Profile routes
     Route::get('/users/profile', [UserController::class, 'profile'])->name('users.profile');
