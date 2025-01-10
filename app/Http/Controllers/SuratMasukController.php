@@ -18,6 +18,8 @@ class SuratMasukController extends Controller
         // Get current user
         $user = Auth::user();
 
+        $users = User::orderBy('nama_lengkap')->get();
+
         // Query surat masuk with relationships
         $suratMasuk = SuratMasuk::with(['user', 'lampiran'])
             ->when($user->level === 'user', function ($query) use ($user) {
@@ -27,7 +29,8 @@ class SuratMasukController extends Controller
             ->get();
 
         return Inertia::render('SuratMasuk/Index', [
-            'suratMasuk' => $suratMasuk
+            'suratMasuk' => $suratMasuk,
+            'users' => $users
         ]);
     }
 

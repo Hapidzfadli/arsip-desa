@@ -1,0 +1,636 @@
+<script setup>
+import { ref, computed, watch, onBeforeUnmount } from 'vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import Modal from '@/Components/Modal.vue';
+import InputLabel from '@/Components/InputLabel.vue';
+import TextInput from '@/Components/TextInput.vue';
+import InputError from '@/Components/InputError.vue';
+import PrimaryButton from '@/Components/PrimaryButton.vue';
+import SecondaryButton from '@/Components/SecondaryButton.vue';
+import DangerButton from '@/Components/DangerButton.vue';
+import {
+    MagnifyingGlassIcon,
+    PlusIcon,
+    EnvelopeIcon,
+    EnvelopeOpenIcon,
+    EyeIcon,
+    PencilSquareIcon,
+    TrashIcon,
+    DocumentIcon,
+    ArrowDownTrayIcon
+} from '@heroicons/vue/24/outline';
+
+// Define props
+const props = defineProps({
+    suratMasuk: {
+        type: Array,
+        required: true
+    },
+    users: {
+        type: Array,
+        required: true
+    }
+});
+
+// Search and filter state
+const search = ref('');
+const filterStatus = ref('all');
+const sortField = ref('tgl_sm');
+const sortDirection = ref('desc');
+
+// Modal states
+const showCreateModal = ref(false);
+const showEditModal = ref(false);
+const showDeleteModal = ref(false);
+const showViewModal = ref(false);
+const selectedSurat = ref(null);
+
+// File preview state
+const previewUrl = ref('');
+const fileInput = ref(null);
+
+// Forms
+const createForm = useForm({
+    no_asal: '',
+    tgl_no_asal: '',
+    penerima: '',
+    perihal: '',
+    lampiran: null
+});
+
+const editForm = useForm({
+    tgl_no_asal: '',
+    penerima: '',
+    perihal: ''
+});
+
+// Computed properties for filtering and sorting
+const filteredAndSortedSuratMasuk = computed(() => {
+    let filtered = [...props.suratMasuk];
+
+    // Apply search filter
+    if (search.value) {
+        const searchTerm = search.value.toLowerCase();
+        filtered = filtered.filter(surat => 
+            surat.no_surat?.toLowerCase().includes(searchTerm) ||
+            surat.perihal?.toLowerCase().includes(searchTerm) ||
+            surat.pengirim?.toLowerCase().includes(searchTerm)
+        );
+    }
+
+    // Apply status filter
+    if (filterStatus.value !== 'all') {
+        filtered = filtered.filter(surat => 
+            filterStatus.value === 'read' ? surat.dibaca : !surat.dibaca
+        );
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+        let aVal = a[sortField.value];
+        let bVal = b[sortField.value];
+
+        if (typeof aVal === 'string') {
+            aVal = aVal.toLowerCase();
+            bVal = bVal.toLowerCase();
+        }
+
+        if (sortDirection.value === 'asc') {
+            return aVal > bVal ? 1 : -1;
+        }
+        return aVal < bVal ? 1 : -1;
+    });
+
+    return filtered;
+});
+
+// Methods for handling forms
+const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        createForm.lampiran = file;
+        
+        // Create preview URL for supported file types
+        if (file.type.startsWith('image/')) {
+            previewUrl.value = URL.createObjectURL(file);
+        } else {
+            previewUrl.value = '';
+        }
+    }
+};
+
+const submitCreate = () => {
+    createForm.post(route('surat-masuk.store'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showCreateModal.value = false;
+            createForm.reset();
+            previewUrl.value = '';
+            if (fileInput.value) {
+                fileInput.value.value = '';
+            }
+        },
+    });
+};
+
+const editSurat = (surat) => {
+    selectedSurat.value = surat;
+    editForm.tgl_no_asal = surat.tgl_no_asal;
+    editForm.penerima = surat.penerima;
+    editForm.perihal = surat.perihal;
+    showEditModal.value = true;
+};
+
+const submitEdit = () => {
+    editForm.put(route('surat-masuk.update', selectedSurat.value.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showEditModal.value = false;
+            editForm.reset();
+            selectedSurat.value = null;
+        },
+    });
+};
+
+const viewSurat = (surat) => {
+    selectedSurat.value = surat;
+    showViewModal.value = true;
+};
+
+const confirmDelete = (surat) => {
+    selectedSurat.value = surat;
+    showDeleteModal.value = true;
+};
+
+const submitDelete = () => {
+    useForm({}).delete(route('surat-masuk.destroy', selectedSurat.value.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showDeleteModal.value = false;
+            selectedSurat.value = null;
+        },
+    });
+};
+
+const toggleSort = (field) => {
+    if (sortField.value === field) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortField.value = field;
+        sortDirection.value = 'asc';
+    }
+};
+
+// Format date helper
+const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
+    });
+};
+
+// Cleanup preview URL when component is unmounted
+onBeforeUnmount(() => {
+    if (previewUrl.value) {
+        URL.revokeObjectURL(previewUrl.value);
+    }
+});
+</script>
+
+<template>
+    <AuthenticatedLayout>
+        <Head title="Surat Masuk" />
+
+        <template #header>
+            <div class="flex justify-between items-center">
+                <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                    Surat Masuk
+                </h2>
+                <button
+                    @click="showCreateModal = true"
+                    class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                    <PlusIcon class="w-5 h-5" />
+                    Tambah Surat
+                </button>
+            </div>
+        </template>
+
+        <div class="py-6">
+            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <!-- Search and Filter Section -->
+                <div class="mb-6 bg-white rounded-lg shadow p-4 flex flex-col sm:flex-row gap-4">
+                    <div class="relative flex-1">
+                        <MagnifyingGlassIcon class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                            type="text"
+                            v-model="search"
+                            placeholder="Cari surat masuk..."
+                            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                    </div>
+                    <select
+                        v-model="filterStatus"
+                        class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                        <option value="all">Semua Status</option>
+                        <option value="read">Sudah Dibaca</option>
+                        <option value="unread">Belum Dibaca</option>
+                    </select>
+                </div>
+
+                <!-- Table Section -->
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Status
+                                    </th>
+                                    <th 
+                                        @click="toggleSort('no_surat')"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                                    >
+                                        No. Surat
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Perihal
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Pengirim
+                                    </th>
+                                    <th 
+                                        @click="toggleSort('tgl_sm')"
+                                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                                    >
+                                        Tanggal
+                                    </th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Aksi
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <tr v-for="surat in filteredAndSortedSuratMasuk" 
+                                    :key="surat.id"
+                                    class="hover:bg-gray-50 transition-colors"
+                                >
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="flex items-center">
+                                            <EnvelopeOpenIcon 
+                                                v-if="surat.dibaca" 
+                                                class="w-5 h-5 text-gray-400" 
+                                                :title="'Sudah dibaca'"
+                                            />
+                                            <EnvelopeIcon 
+                                                v-else 
+                                                class="w-5 h-5 text-blue-500"
+                                                :title="'Belum dibaca'"
+                                            />
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm font-medium text-gray-900">
+                                            {{ surat.no_surat }}
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        <div class="text-sm text-gray-900 line-clamp-2">
+                                            {{ surat.perihal }}
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm text-gray-900">
+                                            {{ surat.pengirim }}
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm text-gray-500">
+                                            {{ formatDate(surat.tgl_sm) }}
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <div class="flex items-center justify-end gap-2">
+                                            <button 
+                                                @click="viewSurat(surat)"
+                                                class="text-blue-600 hover:text-blue-900"
+                                                title="Lihat detail"
+                                            >
+                                                <EyeIcon class="w-5 h-5" />
+                                            </button>
+                                            <button 
+                                                @click="editSurat(surat)"
+                                                class="text-yellow-600 hover:text-yellow-900"
+                                                title="Edit surat"
+                                            >
+                                                <PencilSquareIcon class="w-5 h-5" />
+                                            </button>
+                                            <button 
+                                                @click="confirmDelete(surat)"
+                                                class="text-red-600 hover:text-red-900"
+                                                title="Hapus surat"
+                                            >
+                                                <TrashIcon class="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div v-if="filteredAndSortedSuratMasuk.length === 0"
+                    class="text-center py-12 bg-white rounded-lg shadow mt-6"
+                >
+                    <EnvelopeIcon class="mx-auto h-12 w-12 text-gray-400" />
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">
+                        Tidak ada surat masuk
+                    </h3>
+                    <p class="mt-1 text-sm text-gray-500">
+                        {{ search ? 'Tidak ada surat yang sesuai dengan pencarian.' : 'Mulai dengan menambahkan surat masuk baru.' }}
+                    </p>
+                    <div class="mt-6">
+                        <button
+                            @click="showCreateModal = true"
+                            class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                        >
+                            <PlusIcon class="-ml-1 mr-2 h-5 w-5" />
+                            Tambah Surat Masuk
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create Modal -->
+        <Modal :show="showCreateModal" title="Tambah Surat Masuk" @close="showCreateModal = false">
+            <form @submit.prevent="submitCreate" class="space-y-4">
+                <div>
+                    <InputLabel for="no_asal" value="Nomor Surat" />
+                    <TextInput
+                        id="no_asal"
+                        type="text"
+                        v-model="createForm.no_asal"
+                        class="mt-1 block w-full"
+                        placeholder="Masukkan nomor surat"
+                        required
+                    />
+                    <InputError :message="createForm.errors.no_asal" />
+                </div>
+
+                <div>
+                    <InputLabel for="tgl_no_asal" value="Tanggal Surat" />
+                    <TextInput
+                        id="tgl_no_asal"
+                        type="date"
+                        v-model="createForm.tgl_no_asal"
+                        class="mt-1 block w-full"
+                        required
+                    />
+                    <InputError :message="createForm.errors.tgl_no_asal" />
+                </div>
+
+                <div>
+                    <InputLabel for="penerima" value="Penerima" />
+                    <select
+                        id="penerima"
+                        v-model="createForm.penerima"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200"
+                        required
+                    >
+                        <option value="">Pilih Penerima</option>
+                        <option v-for="user in users" :key="user.id" :value="user.id">
+                            {{ user.nama_lengkap }}
+                        </option>
+                    </select>
+                    <InputError :message="createForm.errors.penerima" />
+                </div>
+
+                <div>
+                    <InputLabel for="perihal" value="Perihal" />
+                    <textarea
+                        id="perihal"
+                        v-model="createForm.perihal"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200"
+                        rows="3"
+                        placeholder="Masukkan perihal surat"
+                        required
+                    ></textarea>
+                    <InputError :message="createForm.errors.perihal" />
+                </div>
+
+                <div>
+                    <InputLabel for="lampiran" value="Lampiran" />
+                    <div class="mt-1 flex items-center">
+                        <input
+                            type="file"
+                            id="lampiran"
+                            ref="fileInput"
+                            @change="handleFileChange"
+                            class="hidden"
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                        />
+                        <label
+                            for="lampiran"
+                            class="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer"
+                        >
+                            <span>Pilih File</span>
+                        </label>
+                        <span class="ml-3 text-sm text-gray-500">
+                            {{ createForm.lampiran ? createForm.lampiran.name : 'Tidak ada file dipilih' }}
+                        </span>
+                    </div>
+                    <InputError :message="createForm.errors.lampiran" />
+                    
+                    <!-- File Preview -->
+                    <div v-if="previewUrl" class="mt-2">
+                        <img 
+                            :src="previewUrl" 
+                            class="max-w-xs rounded-lg shadow-sm" 
+                            alt="Preview"
+                        />
+                    </div>
+                </div>
+            </form>
+
+            <template #footer>
+                <SecondaryButton @click="showCreateModal = false">
+                    Batal
+                </SecondaryButton>
+                <PrimaryButton
+                    class="ml-3"
+                    :disabled="createForm.processing"
+                    @click="submitCreate"
+                >
+                    <span v-if="createForm.processing">Menyimpan...</span>
+                    <span v-else>Simpan</span>
+                </PrimaryButton>
+            </template>
+        </Modal>
+
+        <!-- Edit Modal -->
+        <Modal :show="showEditModal" title="Edit Surat Masuk" @close="showEditModal = false">
+            <form @submit.prevent="submitEdit" class="space-y-4">
+                <div>
+                    <InputLabel for="edit_tgl_no_asal" value="Tanggal Surat" />
+                    <TextInput
+                        id="edit_tgl_no_asal"
+                        type="date"
+                        v-model="editForm.tgl_no_asal"
+                        class="mt-1 block w-full"
+                        required
+                    />
+                    <InputError :message="editForm.errors.tgl_no_asal" />
+                </div>
+
+                <div>
+                    <InputLabel for="edit_penerima" value="Penerima" />
+                    <select
+                        id="edit_penerima"
+                        v-model="editForm.penerima"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200"
+                        required
+                    >
+                        <option value="">Pilih Penerima</option>
+                        <option v-for="user in users" :key="user.id" :value="user.id">
+                            {{ user.nama_lengkap }}
+                        </option>
+                    </select>
+                    <InputError :message="editForm.errors.penerima" />
+                </div>
+
+                <div>
+                    <InputLabel for="edit_perihal" value="Perihal" />
+                    <textarea
+                        id="edit_perihal"
+                        v-model="editForm.perihal"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200"
+                        rows="3"
+                        required
+                    ></textarea>
+                    <InputError :message="editForm.errors.perihal" />
+                </div>
+            </form>
+
+            <template #footer>
+                <SecondaryButton @click="showEditModal = false">
+                    Batal
+                </SecondaryButton>
+                <PrimaryButton
+                    class="ml-3"
+                    :disabled="editForm.processing"
+                    @click="submitEdit"
+                >
+                    <span v-if="editForm.processing">Menyimpan...</span>
+                    <span v-else>Simpan</span>
+                </PrimaryButton>
+            </template>
+        </Modal>
+
+        <!-- View Modal -->
+        <Modal :show="showViewModal" title="Detail Surat Masuk" @close="showViewModal = false">
+            <div class="space-y-4" v-if="selectedSurat">
+                <div>
+                    <h4 class="text-sm font-medium text-gray-500">Nomor Surat</h4>
+                    <p class="mt-1 text-sm text-gray-900">{{ selectedSurat.no_surat }}</p>
+                </div>
+
+                <div>
+                    <h4 class="text-sm font-medium text-gray-500">Tanggal Surat</h4>
+                    <p class="mt-1 text-sm text-gray-900">{{ formatDate(selectedSurat.tgl_no_asal) }}</p>
+                </div>
+
+                <div>
+                    <h4 class="text-sm font-medium text-gray-500">Pengirim</h4>
+                    <p class="mt-1 text-sm text-gray-900">{{ selectedSurat.pengirim }}</p>
+                </div>
+
+                <div>
+                    <h4 class="text-sm font-medium text-gray-500">Penerima</h4>
+                    <p class="mt-1 text-sm text-gray-900">{{ selectedSurat.penerima }}</p>
+                </div>
+
+                <div>
+                    <h4 class="text-sm font-medium text-gray-500">Perihal</h4>
+                    <p class="mt-1 text-sm text-gray-900">{{ selectedSurat.perihal }}</p>
+                </div>
+
+                <div v-if="selectedSurat.lampiran">
+                    <h4 class="text-sm font-medium text-gray-500">Lampiran</h4>
+                    <div class="mt-1 flex items-center space-x-2">
+                        <DocumentIcon class="h-5 w-5 text-gray-400" />
+                        <span class="text-sm text-gray-900">{{ selectedSurat.lampiran.nama_berkas }}</span>
+                        <button
+                            class="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
+                        >
+                            <ArrowDownTrayIcon class="h-4 w-4 mr-1" />
+                            Download
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <template #footer>
+                <SecondaryButton @click="showViewModal = false">
+                    Tutup
+                </SecondaryButton>
+            </template>
+        </Modal>
+
+        <!-- Delete Confirmation Modal -->
+        <Modal :show="showDeleteModal" title="Konfirmasi Hapus" @close="showDeleteModal = false">
+            <div class="p-6">
+                <ExclamationTriangleIcon class="h-12 w-12 text-red-600 mx-auto" />
+                <p class="mt-4 text-center text-gray-700">
+                    Apakah Anda yakin ingin menghapus surat masuk ini?<br>
+                    <span class="font-medium">Tindakan ini tidak dapat dibatalkan.</span>
+                </p>
+            </div>
+
+            <template #footer>
+                <SecondaryButton @click="showDeleteModal = false">
+                    Batal
+                </SecondaryButton>
+                <DangerButton
+                    class="ml-3"
+                    :disabled="createForm.processing"
+                    @click="submitDelete"
+                >
+                    Hapus
+                </DangerButton>
+            </template>
+        </Modal>
+    </AuthenticatedLayout>
+</template>
+
+<style scoped>
+/* Transition for table row hover */
+tr {
+    transition: all 0.2s ease;
+}
+
+/* Custom scrollbar for better UX */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+</style>
