@@ -50,6 +50,12 @@ const selectedSurat = ref(null);
 const previewUrl = ref('');
 const fileInput = ref(null);
 
+const uploadMethod = ref('file');
+const video = ref(null);
+const imageCaptured = ref(false);
+const capturedImage = ref(null);
+let stream = null;
+
 // Forms
 const createForm = useForm({
     no_asal: '',
@@ -191,11 +197,75 @@ const formatDate = (dateString) => {
     });
 };
 
+// Initialize camera when camera method is selected
+watch(uploadMethod, async (newValue) => {
+    if (newValue === 'camera') {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ 
+                video: {
+                    facingMode: isMobile() ? 'environment' : 'user'
+                }
+            });
+            if (video.value) {
+                video.value.srcObject = stream;
+            }
+        } catch (err) {
+            console.error('Error accessing camera:', err);
+        }
+    } else {
+        stopCamera();
+    }
+});
+
+const isMobile = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+};
+
+const stopCamera = () => {
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+    }
+    if (video.value) {
+        video.value.srcObject = null;
+    }
+};
+
+const captureImage = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.value.videoWidth;
+    canvas.height = video.value.videoHeight;
+    canvas.getContext('2d').drawImage(video.value, 0, 0);
+    capturedImage.value = canvas.toDataURL('image/jpeg');
+    imageCaptured.value = true;
+};
+
+const retakePhoto = () => {
+    imageCaptured.value = false;
+    capturedImage.value = null;
+};
+
+const usePhoto = () => {
+    // Convert base64 to file
+    fetch(capturedImage.value)
+        .then(res => res.blob())
+        .then(blob => {
+            const file = new File([blob], "captured-image.jpg", { type: "image/jpeg" });
+            createForm.lampiran = file;
+            previewUrl.value = URL.createObjectURL(file);
+        });
+    stopCamera();
+};
+
 // Cleanup preview URL when component is unmounted
 onBeforeUnmount(() => {
     if (previewUrl.value) {
         URL.revokeObjectURL(previewUrl.value);
     }
+});
+
+onBeforeUnmount(() => {
+    stopCamera();
 });
 </script>
 
@@ -425,36 +495,106 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div>
-                    <InputLabel for="lampiran" value="Lampiran" />
-                    <div class="mt-1 flex items-center">
-                        <input
-                            type="file"
-                            id="lampiran"
-                            ref="fileInput"
-                            @change="handleFileChange"
-                            class="hidden"
-                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                        />
-                        <label
-                            for="lampiran"
-                            class="px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer"
-                        >
-                            <span>Pilih File</span>
-                        </label>
-                        <span class="ml-3 text-sm text-gray-500">
-                            {{ createForm.lampiran ? createForm.lampiran.name : 'Tidak ada file dipilih' }}
-                        </span>
+                    <InputLabel value="Metode Upload Lampiran" />
+                    <div class="mt-2 space-y-4">
+                        <!-- Upload Method Selection -->
+                        <div class="flex space-x-4">
+                            <label class="flex items-center">
+                                <input 
+                                    type="radio" 
+                                    v-model="uploadMethod" 
+                                    value="file" 
+                                    class="form-radio text-blue-600"
+                                >
+                                <span class="ml-2">Upload File</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input 
+                                    type="radio" 
+                                    v-model="uploadMethod" 
+                                    value="camera" 
+                                    class="form-radio text-blue-600"
+                                >
+                                <span class="ml-2">Ambil Foto</span>
+                            </label>
+                        </div>
+
+                        <!-- File Upload Section -->
+                        <div v-if="uploadMethod === 'file'" class="mt-3">
+                            <input
+                                type="file"
+                                id="lampiran"
+                                ref="fileInput"
+                                @change="handleFileChange"
+                                class="hidden"
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                            />
+                            <label
+                                for="lampiran"
+                                class="flex items-center justify-center px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer"
+                            >
+                                <DocumentIcon class="w-5 h-5 mr-2" />
+                                <span>Pilih File</span>
+                            </label>
+                            <p class="mt-1 text-sm text-gray-500">
+                                {{ createForm.lampiran ? createForm.lampiran.name : 'Tidak ada file dipilih' }}
+                            </p>
+                        </div>
+
+                        <!-- Camera Capture Section -->
+                        <div v-if="uploadMethod === 'camera'" class="mt-3">
+                            <div class="space-y-4">
+                                <!-- Camera Preview -->
+                                <div v-if="!imageCaptured" class="relative">
+                                    <video
+                                        ref="video"
+                                        class="w-full rounded-lg border border-gray-300"
+                                        autoplay
+                                        playsinline
+                                    ></video>
+                                    <button
+                                        @click="captureImage"
+                                        class="absolute bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                    >
+                                        Ambil Foto
+                                    </button>
+                                </div>
+
+                                <!-- Captured Image Preview -->
+                                <div v-if="imageCaptured" class="space-y-3">
+                                    <img 
+                                        :src="capturedImage" 
+                                        class="w-full rounded-lg border border-gray-300" 
+                                        alt="Captured"
+                                    />
+                                    <div class="flex justify-center space-x-3">
+                                        <button
+                                            @click="retakePhoto"
+                                            class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                                        >
+                                            Ambil Ulang
+                                        </button>
+                                        <button
+                                            @click="usePhoto"
+                                            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                                        >
+                                            Gunakan Foto
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Preview for both methods -->
+                        <div v-if="previewUrl" class="mt-3">
+                            <img 
+                                :src="previewUrl" 
+                                class="max-w-xs rounded-lg shadow-sm" 
+                                alt="Preview"
+                            />
+                        </div>
                     </div>
                     <InputError :message="createForm.errors.lampiran" />
-                    
-                    <!-- File Preview -->
-                    <div v-if="previewUrl" class="mt-2">
-                        <img 
-                            :src="previewUrl" 
-                            class="max-w-xs rounded-lg shadow-sm" 
-                            alt="Preview"
-                        />
-                    </div>
                 </div>
             </form>
 
