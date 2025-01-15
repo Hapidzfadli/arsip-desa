@@ -85,13 +85,6 @@ const filteredAndSortedSuratMasuk = computed(() => {
         );
     }
 
-    // Apply status filter
-    if (filterStatus.value !== 'all') {
-        filtered = filtered.filter(surat => 
-            filterStatus.value === 'read' ? surat.dibaca : !surat.dibaca
-        );
-    }
-
     // Apply sorting
     filtered.sort((a, b) => {
         let aVal = a[sortField.value];
@@ -190,7 +183,18 @@ const toggleSort = (field) => {
 
 // Format date helper
 const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('id-ID', {
+    // Handle the date format from the backend (assuming it's in "dd-mm-yyyy" format)
+    if (!dateString) return '-';
+    
+    const parts = dateString.split('-');
+    if (parts.length !== 3) return dateString;
+
+    // Create date object with the correct format (yyyy-mm-dd)
+    const date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+    
+    if (isNaN(date.getTime())) return dateString;
+    
+    return date.toLocaleDateString('id-ID', {
         day: '2-digit',
         month: 'long',
         year: 'numeric'
@@ -301,14 +305,6 @@ onBeforeUnmount(() => {
                             class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                     </div>
-                    <select
-                        v-model="filterStatus"
-                        class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                        <option value="all">Semua Status</option>
-                        <option value="read">Sudah Dibaca</option>
-                        <option value="unread">Belum Dibaca</option>
-                    </select>
                 </div>
 
                 <!-- Table Section -->
@@ -318,7 +314,7 @@ onBeforeUnmount(() => {
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Status
+                                        No
                                     </th>
                                     <th 
                                         @click="toggleSort('no_surat')"
@@ -344,24 +340,15 @@ onBeforeUnmount(() => {
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <tr v-for="surat in filteredAndSortedSuratMasuk" 
-                                    :key="surat.id"
-                                    class="hover:bg-gray-50 transition-colors"
-                                >
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="flex items-center">
-                                            <EnvelopeOpenIcon 
-                                                v-if="surat.dibaca" 
-                                                class="w-5 h-5 text-gray-400" 
-                                                :title="'Sudah dibaca'"
-                                            />
-                                            <EnvelopeIcon 
-                                                v-else 
-                                                class="w-5 h-5 text-blue-500"
-                                                :title="'Belum dibaca'"
-                                            />
-                                        </div>
-                                    </td>
+                                <tr v-for="(surat, index) in filteredAndSortedSuratMasuk" 
+                                        :key="surat.id"
+                                        class="hover:bg-gray-50 transition-colors"
+                                    >
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm font-medium text-gray-900">
+                                        {{ index + 1 }}
+                                    </div>
+                                </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="text-sm font-medium text-gray-900">
                                             {{ surat.no_surat }}

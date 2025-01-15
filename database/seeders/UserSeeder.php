@@ -14,24 +14,24 @@ class UserSeeder extends Seeder
      */
     public function run(): void
     {
-        // Create Kepala Desa account
-        $kepalaDesa = User::create([
-            'username' => 'kepaladesa',
-            'password' => Hash::make('desa123'), // You should change this password
-            'nama_lengkap' => 'Kepala Desa',
-            'email' => 'kepaladesa@desa.id',
+        // Create Sekretaris Desa account (main admin)
+        $sekdes = User::create([
+            'username' => 'sekdes',
+            'password' => Hash::make('sekdes123'), // You should change this password
+            'nama_lengkap' => 'Sekretaris Desa',
+            'email' => 'sekdes@desa.id',
             'alamat' => 'Alamat Desa',
-            'telp' => '08123456789',
-            'pengalaman' => 'Kepala Desa Periode 2024-2029',
-            'level' => 'admin', // Using admin level for broader access
+            'telp' => '08198765432',
+            'pengalaman' => 'Sekretaris Desa Periode 2024-2029',
+            'level' => 'admin',
             'status' => 'aktif',
             'tgl_daftar' => now()->format('d-m-Y H:i:s')
         ]);
 
-        // Create department for Kepala Desa
+        // Create department for Sekdes
         Bagian::create([
-            'nama_bagian' => 'kades',
-            'user_id' => $kepalaDesa->id
+            'nama_bagian' => 'sekdes',
+            'user_id' => $sekdes->id
         ]);
 
         // Create Admin Desa account
