@@ -58,6 +58,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('surat-keluar.disposisi');
     Route::post('surat-keluar/{suratKeluar}/peringatan', [SuratKeluarController::class, 'togglePeringatan'])
         ->name('surat-keluar.peringatan');
+    Route::get('surat-keluar/{suratKeluar}/download-lampiran', [SuratKeluarController::class, 'downloadLampiran'])
+        ->name('surat-keluar.download-lampiran');
 
     // Bagian routes (admin/s_admin only)
     Route::middleware(['can:manage-bagian'])->group(function () {

@@ -14,83 +14,88 @@ use Inertia\Inertia;
 
 class SuratKeluarController extends Controller
 {
-    // Constructor to apply middleware
     public function __construct()
     {
         $this->middleware('auth');
     }
 
     /**
-     * Display a listing of surat keluar
+     * Check if user is Sekdes
+     */
+    private function isSekdes(): bool
+    {
+        return User::where('id', Auth::id())
+            ->where('username', 'sekdes')
+            ->exists();
+    }
+
+    /**
+     * Get user permissions
+     */
+    private function checkPermissions(SuratKeluar $suratKeluar = null)
+    {
+        $isSekdes = $this->isSekdes();
+
+        $permissions = [
+            'canCreate' => $isSekdes,
+            'canEdit' => $isSekdes,
+            'canDelete' => $isSekdes,
+            'canView' => true
+        ];
+
+        return $permissions;
+    }
+
+    /**
+     * Display list of surat keluar
      */
     public function index()
     {
-        $user = Auth::user();
+        $this->authorize('viewAny', SuratKeluar::class);
 
-        // Query surat keluar with relationships
-        // If user level is 'user', only show their own letters
-        $suratKeluar = SuratKeluar::with(['user', 'bagian', 'lampiran'])
-            ->when($user->level === 'user', function ($query) use ($user) {
+        $user = User::find(Auth::id());
+        $isSekdes = $this->isSekdes();
+
+        $suratKeluar = SuratKeluar::with(['user', 'lampiran'])
+            ->when(!$isSekdes, function ($query) use ($user) {
                 return $query->where('user_id', $user->id);
             })
             ->orderBy('id', 'DESC')
             ->get();
 
-        // Return view with data
         return Inertia::render('SuratKeluar/Index', [
             'suratKeluar' => $suratKeluar,
-            'userLevel' => $user->level
+            'permissions' => $this->checkPermissions()
         ]);
     }
 
     /**
-     * Show form for creating new surat keluar
-     */
-    public function create()
-    {
-        // Check if user is allowed to create
-        if (Auth::user()->level === 's_admin') {
-            return redirect()->route('404');
-        }
-
-        // Get bagian data for dropdown
-        $bagian = Bagian::where('user_id', Auth::id())
-            ->orderBy('nama_bagian', 'ASC')
-            ->get();
-
-        // Generate next surat number
-        $nextNumber = $this->generateNextNumber();
-
-        return Inertia::render('SuratKeluar/Create', [
-            'bagian' => $bagian,
-            'nextNumber' => $nextNumber,
-            'today' => now()->format('d-m-Y')
-        ]);
-    }
-
-    /**
-     * Store a newly created surat keluar
+     * Store surat keluar
      */
     public function store(Request $request)
     {
-        // Validate request
+        if (!$this->isSekdes()) {
+            abort(403, 'Hanya Sekdes yang dapat membuat surat keluar.');
+        }
+
         $request->validate([
             'no_surat' => 'required',
-            'tgl_ns' => 'required|date_format:d-m-Y',
-            'bagian_id' => 'required|exists:bagian,id',
+            'tgl_ns' => 'required|date',
+            'penerima' => 'required|string',
+            'pengirim' => 'required|string',
             'perihal' => 'required',
-            'lampiran' => 'required|file|max:10240' // Max 10MB
+            'lampiran' => 'required|file|max:10240'
         ]);
 
-        // Generate unique token for attachments
         $token = Str::random(40);
 
         // Create surat keluar
         $suratKeluar = SuratKeluar::create([
             'no_surat' => $request->no_surat,
             'tgl_ns' => $request->tgl_ns,
+            'pengirim' => $request->pengirim,
+            'penerima' => $request->penerima,
             'perihal' => $request->perihal,
-            'bagian_id' => $request->bagian_id,
             'token_lampiran' => $token,
             'user_id' => Auth::id(),
             'dibaca' => 0,
@@ -99,15 +104,12 @@ class SuratKeluarController extends Controller
             'tgl_sk' => now()->format('d-m-Y')
         ]);
 
-        // Handle file upload
+        // Handle lampiran
         if ($request->hasFile('lampiran')) {
             $file = $request->file('lampiran');
             $fileName = $file->getClientOriginalName();
 
-            // Store file
             $file->storeAs('lampiran', $fileName);
-
-            // Create lampiran record
             Lampiran::create([
                 'nama_berkas' => $fileName,
                 'ukuran' => $file->getSize(),
@@ -120,71 +122,38 @@ class SuratKeluarController extends Controller
     }
 
     /**
-     * Display the specified surat keluar
+     * Show surat keluar
      */
     public function show(SuratKeluar $suratKeluar)
     {
-        // Load relationships
-        $suratKeluar->load(['user', 'bagian', 'lampiran']);
-
-        // Mark as read if admin
-        if (Auth::user()->level === 'admin') {
-            $suratKeluar->update(['dibaca' => 1]);
-        }
-
-        // Get bagian for disposisi dropdown
-        $bagianList = Bagian::orderBy('nama_bagian', 'ASC')->get();
+        $this->authorize('view', $suratKeluar);
 
         return Inertia::render('SuratKeluar/Show', [
-            'suratKeluar' => $suratKeluar,
-            'bagianList' => $bagianList,
-            'userLevel' => Auth::user()->level
+            'suratKeluar' => $suratKeluar->load(['user', 'lampiran']),
+            'permissions' => $this->checkPermissions($suratKeluar)
         ]);
     }
 
     /**
-     * Show form for editing surat keluar
-     */
-    public function edit(SuratKeluar $suratKeluar)
-    {
-        // Check authorization
-        if (Auth::user()->level === 's_admin' || Auth::user()->level === 'admin') {
-            return redirect()->route('404');
-        }
-
-        // Check if user owns this surat
-        if ($suratKeluar->user_id !== Auth::id()) {
-            return redirect()->route('surat-keluar.index')
-                ->with('error', 'Anda tidak berhak mengubah surat keluar ini');
-        }
-
-        // Get bagian data
-        $bagian = Bagian::where('user_id', Auth::id())
-            ->orderBy('nama_bagian', 'ASC')
-            ->get();
-
-        return Inertia::render('SuratKeluar/Edit', [
-            'suratKeluar' => $suratKeluar->load(['lampiran']),
-            'bagian' => $bagian
-        ]);
-    }
-
-    /**
-     * Update the specified surat keluar
+     * Update surat keluar
      */
     public function update(Request $request, SuratKeluar $suratKeluar)
     {
-        // Validate request
+        if (!$this->isSekdes()) {
+            abort(403, 'Hanya Sekdes yang dapat mengedit surat keluar.');
+        }
+
         $request->validate([
-            'tgl_ns' => 'required|date_format:d-m-Y',
-            'bagian_id' => 'required|exists:bagian,id',
+            'tgl_ns' => 'required|date',
+            'penerima' => 'required|string',
+            'pengirim' => 'required|string',
             'perihal' => 'required'
         ]);
 
-        // Update surat keluar
         $suratKeluar->update([
             'tgl_ns' => $request->tgl_ns,
-            'bagian_id' => $request->bagian_id,
+            'penerima' => $request->penerima,
+            'pengirim' => $request->pengirim,
             'perihal' => $request->perihal
         ]);
 
@@ -193,16 +162,12 @@ class SuratKeluarController extends Controller
     }
 
     /**
-     * Remove the specified surat keluar
+     * Delete surat keluar
      */
     public function destroy(SuratKeluar $suratKeluar)
     {
-        // Check if user can delete
-        if (Auth::user()->level === 's_admin' || Auth::user()->level === 'admin') {
-            return redirect()->route('404');
-        }
+        $this->authorize('delete', $suratKeluar);
 
-        // Delete associated files
         if ($suratKeluar->token_lampiran) {
             $lampiran = Lampiran::where('token_lampiran', $suratKeluar->token_lampiran)->get();
 
@@ -219,45 +184,26 @@ class SuratKeluarController extends Controller
     }
 
     /**
-     * Toggle disposisi status
+     * Download lampiran
      */
-    public function toggleDisposisi(Request $request, SuratKeluar $suratKeluar)
+    public function downloadLampiran(SuratKeluar $suratKeluar)
     {
-        if ($request->disposisi) {
-            $suratKeluar->update(['disposisi' => $request->bagian]);
-        } else {
-            $suratKeluar->update(['disposisi' => '']);
+        $this->authorize('downloadLampiran', $suratKeluar);
+
+        $lampiran = Lampiran::where('token_lampiran', $suratKeluar->token_lampiran)->first();
+
+        if (!$lampiran) {
+            return redirect()->back()
+                ->with('error', 'Lampiran tidak ditemukan');
         }
 
-        return redirect()->back();
-    }
+        $path = storage_path('app/lampiran/' . $lampiran->nama_berkas);
 
-    /**
-     * Toggle peringatan status
-     */
-    public function togglePeringatan(SuratKeluar $suratKeluar)
-    {
-        $suratKeluar->update([
-            'peringatan' => !$suratKeluar->peringatan
-        ]);
-
-        return redirect()->back();
-    }
-
-    /**
-     * Generate next surat keluar number
-     */
-    protected function generateNextNumber()
-    {
-        $lastSurat = SuratKeluar::orderBy('id', 'DESC')->first();
-
-        if (!$lastSurat) {
-            return "SKm/001";
+        if (!file_exists($path)) {
+            return redirect()->back()
+                ->with('error', 'File tidak ditemukan');
         }
 
-        $lastNumber = (int)substr($lastSurat->no_surat, 4);
-        $newNumber = $lastNumber + 1;
-
-        return "SKm/" . str_pad($newNumber, 3, "0", STR_PAD_LEFT);
+        return response()->download($path, $lampiran->nama_berkas);
     }
 }
