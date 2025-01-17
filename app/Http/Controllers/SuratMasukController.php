@@ -29,9 +29,26 @@ class SuratMasukController extends Controller
      */
     private function isSekdes(): bool
     {
-        return Bagian::where('user_id', Auth::id())
-            ->where('nama_bagian', 'sekdes')
-            ->exists() && Auth::user()->level === 'admin';
+        return User::where('id', Auth::id())
+            ->where('username', 'sekdes')
+            ->exists();
+    }
+
+    /**
+     * Get user permissions
+     */
+    private function checkPermissions(SuratMasuk $suratMasuk = null)
+    {
+        $isSekdes = $this->isSekdes();
+
+        $permissions = [
+            'canCreate' => $isSekdes,
+            'canEdit' => $isSekdes,
+            'canDelete' => $isSekdes,
+            'canView' => true
+        ];
+
+        return $permissions;
     }
 
     /**
@@ -42,27 +59,19 @@ class SuratMasukController extends Controller
     {
         $this->authorize('viewAny', SuratMasuk::class);
 
-        $user = Auth::user();
-        $users = User::orderBy('nama_lengkap')->get();
+        $user = User::find(Auth::id());
+        $isSekdes = $this->isSekdes();
 
-        // Query surat masuk with relationships
         $suratMasuk = SuratMasuk::with(['user', 'lampiran'])
+            ->when(!$isSekdes, function ($query) use ($user) {
+                return $query->where('user_id', $user->id);
+            })
             ->orderBy('id', 'DESC')
             ->get();
 
-        // Check sekdes permissions for UI controls
-        $isSekdes = $this->isSekdes();
-
         return Inertia::render('SuratMasuk/Index', [
             'suratMasuk' => $suratMasuk,
-            'users' => $users,
-            'permissions' => [
-                'canCreate' => $isSekdes,
-                'canEdit' => $isSekdes,
-                'canDelete' => $isSekdes,
-                'canPrint' => true,
-                'canSearch' => true,
-            ]
+            'permissions' => $this->checkPermissions()
         ]);
     }
 
@@ -86,41 +95,41 @@ class SuratMasukController extends Controller
      */
     public function store(Request $request)
     {
-        $this->authorize('create', SuratMasuk::class);
+        if (!$this->isSekdes()) {
+            abort(403, 'Hanya Sekdes yang dapat membuat surat masuk.');
+        }
 
-        // Validate the incoming request
         $request->validate([
             'no_asal' => 'required',
             'tgl_no_asal' => 'required|date',
-            'penerima' => 'required|exists:users,id',
+            'penerima' => 'required|string', // Changed to string validation
+            'pengirim' => 'required|string',
             'perihal' => 'required',
-            'lampiran' => 'required|file|max:10240' // 10MB max size
+            'lampiran' => 'required|file|max:10240'
         ]);
 
-        // Generate unique token for attachments
         $token = Str::random(40);
 
-        // Create new surat masuk record
+        // Create surat masuk
         $suratMasuk = SuratMasuk::create([
             'no_surat' => $request->no_asal,
             'tgl_ns' => $request->tgl_no_asal,
             'no_asal' => $request->no_asal,
             'tgl_no_asal' => $request->tgl_no_asal,
-            'pengirim' => Auth::user()->nama_lengkap,
+            'pengirim' => $request->pengirim,
             'penerima' => $request->penerima,
             'perihal' => $request->perihal,
             'token_lampiran' => $token,
-            'user_id' => $request->penerima,
+            'user_id' => Auth::id(), // Set to current user ID (Sekdes)
             'dibaca' => 0,
             'tgl_sm' => now()->format('d-m-Y')
         ]);
 
-        // Handle file upload if present
+        // Handle lampiran
         if ($request->hasFile('lampiran')) {
             $file = $request->file('lampiran');
             $fileName = $file->getClientOriginalName();
 
-            // Store file and create lampiran record
             $file->storeAs('lampiran', $fileName);
             Lampiran::create([
                 'nama_berkas' => $fileName,
@@ -172,19 +181,22 @@ class SuratMasukController extends Controller
      */
     public function update(Request $request, SuratMasuk $suratMasuk)
     {
-        $this->authorize('update', $suratMasuk);
+        if (!$this->isSekdes()) {
+            abort(403, 'Hanya Sekdes yang dapat mengedit surat masuk.');
+        }
 
         $request->validate([
             'tgl_no_asal' => 'required|date',
-            'penerima' => 'required|exists:users,id',
+            'penerima' => 'required|string', // Changed to string validation
+            'pengirim' => 'required|string',
             'perihal' => 'required'
         ]);
 
         $suratMasuk->update([
             'tgl_no_asal' => $request->tgl_no_asal,
             'penerima' => $request->penerima,
-            'perihal' => $request->perihal,
-            'user_id' => $request->penerima
+            'pengirim' => $request->pengirim,
+            'perihal' => $request->perihal
         ]);
 
         return redirect()->route('surat-masuk.index')
@@ -237,18 +249,22 @@ class SuratMasukController extends Controller
 
         $lampiran = Lampiran::where('token_lampiran', $suratMasuk->token_lampiran)->first();
 
+
         if (!$lampiran) {
             return redirect()->back()
                 ->with('error', 'Lampiran tidak ditemukan');
         }
 
-        $path = 'lampiran/' . $lampiran->nama_berkas;
-
-        if (!Storage::exists($path)) {
+        $path = storage_path('app/lampiran/' . $lampiran->nama_berkas); // Ubah path untuk mencakup full path
+        if (!file_exists($path)) {
             return redirect()->back()
                 ->with('error', 'File tidak ditemukan');
         }
 
-        return Storage::download($path);
+        // Gunakan response()->download untuk memastikan file terdownload
+        return response()->file($path, [
+            'Content-Type' => mime_content_type($path),
+            'Content-Disposition' => 'attachment; filename="' . $lampiran->nama_berkas . '"'
+        ]);
     }
 }

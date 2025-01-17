@@ -18,7 +18,8 @@ import {
     PencilSquareIcon,
     TrashIcon,
     DocumentIcon,
-    ArrowDownTrayIcon
+    ArrowDownTrayIcon,
+    ExclamationTriangleIcon
 } from '@heroicons/vue/24/outline';
 
 // Define props
@@ -27,9 +28,15 @@ const props = defineProps({
         type: Array,
         required: true
     },
-    users: {
-        type: Array,
-        required: true
+    permissions: {
+        type: Object,
+        required: true,
+        default: () => ({
+            canCreate: false,
+            canEdit: false,
+            canDelete: false,
+            canView: true
+        })
     }
 });
 
@@ -61,6 +68,7 @@ const createForm = useForm({
     no_asal: '',
     tgl_no_asal: '',
     penerima: '',
+    pengirim: '',
     perihal: '',
     lampiran: null
 });
@@ -68,6 +76,7 @@ const createForm = useForm({
 const editForm = useForm({
     tgl_no_asal: '',
     penerima: '',
+    pengirim: '',
     perihal: ''
 });
 
@@ -78,7 +87,7 @@ const filteredAndSortedSuratMasuk = computed(() => {
     // Apply search filter
     if (search.value) {
         const searchTerm = search.value.toLowerCase();
-        filtered = filtered.filter(surat => 
+        filtered = filtered.filter(surat =>
             surat.no_surat?.toLowerCase().includes(searchTerm) ||
             surat.perihal?.toLowerCase().includes(searchTerm) ||
             surat.pengirim?.toLowerCase().includes(searchTerm)
@@ -109,7 +118,7 @@ const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
         createForm.lampiran = file;
-        
+
         // Create preview URL for supported file types
         if (file.type.startsWith('image/')) {
             previewUrl.value = URL.createObjectURL(file);
@@ -185,15 +194,15 @@ const toggleSort = (field) => {
 const formatDate = (dateString) => {
     // Handle the date format from the backend (assuming it's in "dd-mm-yyyy" format)
     if (!dateString) return '-';
-    
+
     const parts = dateString.split('-');
     if (parts.length !== 3) return dateString;
 
     // Create date object with the correct format (yyyy-mm-dd)
     const date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-    
+
     if (isNaN(date.getTime())) return dateString;
-    
+
     return date.toLocaleDateString('id-ID', {
         day: '2-digit',
         month: 'long',
@@ -205,7 +214,7 @@ const formatDate = (dateString) => {
 watch(uploadMethod, async (newValue) => {
     if (newValue === 'camera') {
         try {
-            stream = await navigator.mediaDevices.getUserMedia({ 
+            stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     facingMode: isMobile() ? 'environment' : 'user'
                 }
@@ -283,6 +292,7 @@ onBeforeUnmount(() => {
                     Surat Masuk
                 </h2>
                 <button
+                    v-if="permissions.canCreate"
                     @click="showCreateModal = true"
                     class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
@@ -316,7 +326,7 @@ onBeforeUnmount(() => {
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         No
                                     </th>
-                                    <th 
+                                    <th
                                         @click="toggleSort('no_surat')"
                                         class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                                     >
@@ -328,7 +338,10 @@ onBeforeUnmount(() => {
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Pengirim
                                     </th>
-                                    <th 
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Penerima
+                                    </th>
+                                    <th
                                         @click="toggleSort('tgl_sm')"
                                         class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                                     >
@@ -340,7 +353,7 @@ onBeforeUnmount(() => {
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <tr v-for="(surat, index) in filteredAndSortedSuratMasuk" 
+                                <tr v-for="(surat, index) in filteredAndSortedSuratMasuk"
                                         :key="surat.id"
                                         class="hover:bg-gray-50 transition-colors"
                                     >
@@ -365,27 +378,34 @@ onBeforeUnmount(() => {
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm text-gray-900">
+                                            {{ surat.penerima }}
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="text-sm text-gray-500">
                                             {{ formatDate(surat.tgl_sm) }}
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                         <div class="flex items-center justify-end gap-2">
-                                            <button 
+                                            <button
                                                 @click="viewSurat(surat)"
                                                 class="text-blue-600 hover:text-blue-900"
                                                 title="Lihat detail"
                                             >
                                                 <EyeIcon class="w-5 h-5" />
                                             </button>
-                                            <button 
+                                            <button
+                                                v-if="permissions.canEdit"
                                                 @click="editSurat(surat)"
                                                 class="text-yellow-600 hover:text-yellow-900"
                                                 title="Edit surat"
                                             >
                                                 <PencilSquareIcon class="w-5 h-5" />
                                             </button>
-                                            <button 
+                                            <button
+                                                v-if="permissions.canDelete"
                                                 @click="confirmDelete(surat)"
                                                 class="text-red-600 hover:text-red-900"
                                                 title="Hapus surat"
@@ -413,6 +433,7 @@ onBeforeUnmount(() => {
                     </p>
                     <div class="mt-6">
                         <button
+                            v-if="permissions.canCreate"
                             @click="showCreateModal = true"
                             class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
                         >
@@ -454,18 +475,28 @@ onBeforeUnmount(() => {
 
                 <div>
                     <InputLabel for="penerima" value="Penerima" />
-                    <select
+                    <TextInput
                         id="penerima"
                         v-model="createForm.penerima"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200"
+                        type="text"
+                        class="mt-1 block w-full"
+                        placeholder="Masukkan nama penerima"
                         required
-                    >
-                        <option value="">Pilih Penerima</option>
-                        <option v-for="user in users" :key="user.id" :value="user.id">
-                            {{ user.nama_lengkap }}
-                        </option>
-                    </select>
+                    />
                     <InputError :message="createForm.errors.penerima" />
+                </div>
+
+                <div>
+                    <InputLabel for="pengirim" value="Pengirim" />
+                    <TextInput
+                        id="pengirim"
+                        v-model="createForm.pengirim"
+                        type="text"
+                        class="mt-1 block w-full"
+                        placeholder="Masukkan nama pengirim"
+                        required
+                    />
+                    <InputError :message="createForm.errors.pengirim" />
                 </div>
 
                 <div>
@@ -487,19 +518,19 @@ onBeforeUnmount(() => {
                         <!-- Upload Method Selection -->
                         <div class="flex space-x-4">
                             <label class="flex items-center">
-                                <input 
-                                    type="radio" 
-                                    v-model="uploadMethod" 
-                                    value="file" 
+                                <input
+                                    type="radio"
+                                    v-model="uploadMethod"
+                                    value="file"
                                     class="form-radio text-blue-600"
                                 >
                                 <span class="ml-2">Upload File</span>
                             </label>
                             <label class="flex items-center">
-                                <input 
-                                    type="radio" 
-                                    v-model="uploadMethod" 
-                                    value="camera" 
+                                <input
+                                    type="radio"
+                                    v-model="uploadMethod"
+                                    value="camera"
                                     class="form-radio text-blue-600"
                                 >
                                 <span class="ml-2">Ambil Foto</span>
@@ -549,9 +580,9 @@ onBeforeUnmount(() => {
 
                                 <!-- Captured Image Preview -->
                                 <div v-if="imageCaptured" class="space-y-3">
-                                    <img 
-                                        :src="capturedImage" 
-                                        class="w-full rounded-lg border border-gray-300" 
+                                    <img
+                                        :src="capturedImage"
+                                        class="w-full rounded-lg border border-gray-300"
                                         alt="Captured"
                                     />
                                     <div class="flex justify-center space-x-3">
@@ -574,9 +605,9 @@ onBeforeUnmount(() => {
 
                         <!-- Preview for both methods -->
                         <div v-if="previewUrl" class="mt-3">
-                            <img 
-                                :src="previewUrl" 
-                                class="max-w-xs rounded-lg shadow-sm" 
+                            <img
+                                :src="previewUrl"
+                                class="max-w-xs rounded-lg shadow-sm"
                                 alt="Preview"
                             />
                         </div>
@@ -617,18 +648,28 @@ onBeforeUnmount(() => {
 
                 <div>
                     <InputLabel for="edit_penerima" value="Penerima" />
-                    <select
+                    <TextInput
                         id="edit_penerima"
                         v-model="editForm.penerima"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200"
+                        type="text"
+                        class="mt-1 block w-full"
+                        placeholder="Masukkan nama penerima"
                         required
-                    >
-                        <option value="">Pilih Penerima</option>
-                        <option v-for="user in users" :key="user.id" :value="user.id">
-                            {{ user.nama_lengkap }}
-                        </option>
-                    </select>
+                    />
                     <InputError :message="editForm.errors.penerima" />
+                </div>
+
+                <div>
+                    <InputLabel for="edit_pengirim" value="Pengirim" />
+                    <TextInput
+                        id="edit_pengirim"
+                        v-model="editForm.pengirim"
+                        type="text"
+                        class="mt-1 block w-full"
+                        placeholder="Masukkan nama pengirim"
+                        required
+                    />
+                    <InputError :message="editForm.errors.pengirim" />
                 </div>
 
                 <div>
@@ -692,12 +733,14 @@ onBeforeUnmount(() => {
                     <div class="mt-1 flex items-center space-x-2">
                         <DocumentIcon class="h-5 w-5 text-gray-400" />
                         <span class="text-sm text-gray-900">{{ selectedSurat.lampiran.nama_berkas }}</span>
-                        <button
+                        <a
+                            :href="route('surat-masuk.download-lampiran', selectedSurat.id)"
                             class="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
+                            download
                         >
                             <ArrowDownTrayIcon class="h-4 w-4 mr-1" />
                             Download
-                        </button>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -708,7 +751,6 @@ onBeforeUnmount(() => {
                 </SecondaryButton>
             </template>
         </Modal>
-
         <!-- Delete Confirmation Modal -->
         <Modal :show="showDeleteModal" title="Konfirmasi Hapus" @close="showDeleteModal = false">
             <div class="p-6">

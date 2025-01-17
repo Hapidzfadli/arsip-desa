@@ -49,6 +49,8 @@ Route::middleware(['auth'])->group(function () {
     Route::resource('surat-masuk', SuratMasukController::class);
     Route::post('surat-masuk/{suratMasuk}/disposisi', [SuratMasukController::class, 'toggleDisposisi'])
         ->name('surat-masuk.disposisi');
+    Route::get('surat-masuk/{suratMasuk}/download-lampiran', [SuratMasukController::class, 'downloadLampiran'])
+        ->name('surat-masuk.download-lampiran');
 
     // Surat Keluar routes
     Route::resource('surat-keluar', SuratKeluarController::class);
