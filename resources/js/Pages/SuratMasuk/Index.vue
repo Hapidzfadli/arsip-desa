@@ -388,7 +388,7 @@ onBeforeUnmount(() => {
                                         Penerima
                                     </th>
                                     <th
-                                        @click="toggleSort('tgl_sm')"
+                                        @click="toggleSort('tgl_no_asal')"
                                         class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                                     >
                                         Tanggal
@@ -430,7 +430,7 @@ onBeforeUnmount(() => {
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="text-sm text-gray-500">
-                                            {{ formatDate(surat.tgl_sm) }}
+                                            {{ formatDate(surat.tgl_no_asal) }}
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

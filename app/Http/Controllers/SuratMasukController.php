@@ -61,7 +61,7 @@ class SuratMasukController extends Controller
 
         $user = User::find(Auth::id());
         $isSekdes = $this->isSekdes();
-        
+
         $perPage = $request->input('per_page', 10);
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
@@ -71,10 +71,10 @@ class SuratMasukController extends Controller
                 return $query->where('user_id', $user->id);
             })
             ->when($startDate, function ($query) use ($startDate) {
-                return $query->whereDate('tgl_sm', '>=', $startDate);
+                return $query->whereDate('tgl_no_asal', '>=', $startDate);
             })
             ->when($endDate, function ($query) use ($endDate) {
-                return $query->whereDate('tgl_sm', '<=', $endDate);
+                return $query->whereDate('tgl_no_asal', '<=', $endDate);
             })
             ->orderBy('id', 'DESC');
 

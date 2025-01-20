@@ -43,7 +43,7 @@ const props = defineProps({
 
 // State
 const search = ref('');
-const sortField = ref('tgl_sk');
+const sortField = ref('tgl_ns');
 const sortDirection = ref('desc');
 
 // Modal states
@@ -319,7 +319,7 @@ onBeforeUnmount(() => {
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Perihal</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pengirim</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Penerima</th>
-                                <th @click="toggleSort('tgl_sk')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
+                                <th @click="toggleSort('tgl_ns')" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100">
                                     Tanggal
                                 </th>
                                 <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
@@ -346,7 +346,7 @@ onBeforeUnmount(() => {
                                     <div class="text-sm text-gray-900">{{ surat.penerima }}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm text-gray-500">{{ formatDate(surat.tgl_sk) }}</div>
+                                    <div class="text-sm text-gray-500">{{ formatDate(surat.tgl_ns) }}</div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                     <div class="flex items-center justify-end gap-2">
