@@ -1,6 +1,7 @@
+{/* Index.vue */}
 <script setup>
 import { ref, computed, watch, onBeforeUnmount } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Modal from '@/Components/Modal.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -9,6 +10,7 @@ import InputError from '@/Components/InputError.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
+import Pagination from '@/Components/Pagination.vue';
 import {
     MagnifyingGlassIcon,
     PlusIcon,
@@ -22,11 +24,19 @@ import {
     ExclamationTriangleIcon
 } from '@heroicons/vue/24/outline';
 
-// Define props
+// Props
 const props = defineProps({
     suratMasuk: {
-        type: Array,
+        type: Object,
         required: true
+    },
+    filters: {
+        type: Object,
+        default: () => ({
+            start_date: '',
+            end_date: '',
+            per_page: 10
+        })
     },
     permissions: {
         type: Object,
@@ -40,9 +50,11 @@ const props = defineProps({
     }
 });
 
-// Search and filter state
+// Refs for search, filters, and pagination
 const search = ref('');
-const filterStatus = ref('all');
+const startDate = ref(props.filters.start_date || '');
+const endDate = ref(props.filters.end_date || '');
+const perPage = ref(props.filters.per_page?.toString() || '10');
 const sortField = ref('tgl_sm');
 const sortDirection = ref('desc');
 
@@ -53,15 +65,22 @@ const showDeleteModal = ref(false);
 const showViewModal = ref(false);
 const selectedSurat = ref(null);
 
-// File preview state
+// File states
 const previewUrl = ref('');
 const fileInput = ref(null);
-
 const uploadMethod = ref('file');
 const video = ref(null);
 const imageCaptured = ref(false);
 const capturedImage = ref(null);
 let stream = null;
+
+// Pagination options
+const perPageOptions = [
+    { label: '10', value: '10' },
+    { label: '15', value: '15' },
+    { label: '25', value: '25' },
+    { label: '50', value: '50' }
+];
 
 // Forms
 const createForm = useForm({
@@ -80,46 +99,42 @@ const editForm = useForm({
     perihal: ''
 });
 
-// Computed properties for filtering and sorting
-const filteredAndSortedSuratMasuk = computed(() => {
-    let filtered = [...props.suratMasuk];
+// Computed Properties
+const filteredSuratMasuk = computed(() => {
+    if (!search.value) return props.suratMasuk.data;
 
-    // Apply search filter
-    if (search.value) {
-        const searchTerm = search.value.toLowerCase();
-        filtered = filtered.filter(surat =>
-            surat.no_surat?.toLowerCase().includes(searchTerm) ||
-            surat.perihal?.toLowerCase().includes(searchTerm) ||
-            surat.pengirim?.toLowerCase().includes(searchTerm)
-        );
-    }
-
-    // Apply sorting
-    filtered.sort((a, b) => {
-        let aVal = a[sortField.value];
-        let bVal = b[sortField.value];
-
-        if (typeof aVal === 'string') {
-            aVal = aVal.toLowerCase();
-            bVal = bVal.toLowerCase();
-        }
-
-        if (sortDirection.value === 'asc') {
-            return aVal > bVal ? 1 : -1;
-        }
-        return aVal < bVal ? 1 : -1;
-    });
-
-    return filtered;
+    const searchTerm = search.value.toLowerCase();
+    return props.suratMasuk.data.filter(surat =>
+        surat.no_surat?.toLowerCase().includes(searchTerm) ||
+        surat.perihal?.toLowerCase().includes(searchTerm) ||
+        surat.pengirim?.toLowerCase().includes(searchTerm)
+    );
 });
 
-// Methods for handling forms
+// Methods
+const updateFilters = () => {
+    router.get(
+        route('surat-masuk.index'),
+        {
+            search: search.value,
+            start_date: startDate.value,
+            end_date: endDate.value,
+            per_page: perPage.value,
+            sort_field: sortField.value,
+            sort_direction: sortDirection.value,
+            page: 1, // Reset to first page when filters change
+        },
+        {
+            preserveState: true,
+            preserveScroll: true,
+        }
+    );
+};
+
 const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
         createForm.lampiran = file;
-
-        // Create preview URL for supported file types
         if (file.type.startsWith('image/')) {
             previewUrl.value = URL.createObjectURL(file);
         } else {
@@ -146,6 +161,7 @@ const editSurat = (surat) => {
     selectedSurat.value = surat;
     editForm.tgl_no_asal = surat.tgl_no_asal;
     editForm.penerima = surat.penerima;
+    editForm.pengirim = surat.pengirim;
     editForm.perihal = surat.perihal;
     showEditModal.value = true;
 };
@@ -188,21 +204,15 @@ const toggleSort = (field) => {
         sortField.value = field;
         sortDirection.value = 'asc';
     }
+    updateFilters();
 };
 
-// Format date helper
 const formatDate = (dateString) => {
-    // Handle the date format from the backend (assuming it's in "dd-mm-yyyy" format)
     if (!dateString) return '-';
-
     const parts = dateString.split('-');
     if (parts.length !== 3) return dateString;
-
-    // Create date object with the correct format (yyyy-mm-dd)
     const date = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-
     if (isNaN(date.getTime())) return dateString;
-
     return date.toLocaleDateString('id-ID', {
         day: '2-digit',
         month: 'long',
@@ -210,26 +220,7 @@ const formatDate = (dateString) => {
     });
 };
 
-// Initialize camera when camera method is selected
-watch(uploadMethod, async (newValue) => {
-    if (newValue === 'camera') {
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: isMobile() ? 'environment' : 'user'
-                }
-            });
-            if (video.value) {
-                video.value.srcObject = stream;
-            }
-        } catch (err) {
-            console.error('Error accessing camera:', err);
-        }
-    } else {
-        stopCamera();
-    }
-});
-
+// Camera handling
 const isMobile = () => {
     return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
@@ -259,7 +250,6 @@ const retakePhoto = () => {
 };
 
 const usePhoto = () => {
-    // Convert base64 to file
     fetch(capturedImage.value)
         .then(res => res.blob())
         .then(blob => {
@@ -270,14 +260,40 @@ const usePhoto = () => {
     stopCamera();
 };
 
-// Cleanup preview URL when component is unmounted
+// Watchers
+watch(uploadMethod, async (newValue) => {
+    if (newValue === 'camera') {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: isMobile() ? 'environment' : 'user' }
+            });
+            if (video.value) {
+                video.value.srcObject = stream;
+            }
+        } catch (err) {
+            console.error('Error accessing camera:', err);
+        }
+    } else {
+        stopCamera();
+    }
+});
+
+let searchTimeout;
+watch(search, (newValue) => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        updateFilters();
+    }, 300); // Debounce search for 300ms
+});
+
+watch([perPage, startDate, endDate], () => {
+    updateFilters();
+});
+
 onBeforeUnmount(() => {
     if (previewUrl.value) {
         URL.revokeObjectURL(previewUrl.value);
     }
-});
-
-onBeforeUnmount(() => {
     stopCamera();
 });
 </script>
@@ -304,16 +320,46 @@ onBeforeUnmount(() => {
 
         <div class="py-6">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <!-- Search and Filter Section -->
+                <!-- Search and Filters Section -->
                 <div class="mb-6 bg-white rounded-lg shadow p-4 flex flex-col sm:flex-row gap-4">
-                    <div class="relative flex-1">
-                        <MagnifyingGlassIcon class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <input
-                            type="text"
-                            v-model="search"
-                            placeholder="Cari surat masuk..."
-                            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
+                    <div class="flex-1 flex flex-col sm:flex-row gap-4">
+                        <!-- Search input -->
+                        <div class="relative flex-1">
+                            <MagnifyingGlassIcon class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <input
+                                type="text"
+                                v-model="search"
+                                placeholder="Cari surat masuk..."
+                                class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                        </div>
+
+                        <!-- Date range filter -->
+                        <div class="flex items-center space-x-2">
+                            <input
+                                type="date"
+                                v-model="startDate"
+                                class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                            <span class="text-gray-500">to</span>
+                            <input
+                                type="date"
+                                v-model="endDate"
+                                class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                        </div>
+
+                        <!-- Entries per page dropdown -->
+                        <div class="flex items-center space-x-2">
+                            <select
+                                v-model="perPage"
+                                class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                <option v-for="option in perPageOptions" :key="option.value" :value="option.value">
+                                    {{ option.label }}
+                                </option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -353,15 +399,15 @@ onBeforeUnmount(() => {
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <tr v-for="(surat, index) in filteredAndSortedSuratMasuk"
-                                        :key="surat.id"
-                                        class="hover:bg-gray-50 transition-colors"
-                                    >
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm font-medium text-gray-900">
-                                        {{ index + 1 }}
-                                    </div>
-                                </td>
+                                <tr v-for="(surat, index) in filteredSuratMasuk"
+                                    :key="surat.id"
+                                    class="hover:bg-gray-50 transition-colors"
+                                >
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="text-sm font-medium text-gray-900">
+                                            {{ (suratMasuk.current_page - 1) * suratMasuk.per_page + index + 1 }}
+                                        </div>
+                                    </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="text-sm font-medium text-gray-900">
                                             {{ surat.no_surat }}
@@ -420,8 +466,42 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
 
+                <!-- Pagination -->
+                <div class="mt-4 bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                    <div class="flex-1 flex justify-between sm:hidden">
+                        <Link
+                            v-if="suratMasuk.prev_page_url"
+                            :href="suratMasuk.prev_page_url"
+                            class="relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                        >
+                            Previous
+                        </Link>
+                        <Link
+                            v-if="suratMasuk.next_page_url"
+                            :href="suratMasuk.next_page_url"
+                            class="ml-3 relative inline-flex items-center px-4 py-2 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                        >
+                            Next
+                        </Link>
+                    </div>
+                    <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                        <div>
+                            <p class="text-sm text-gray-700">
+                                Showing
+                                <span class="font-medium">{{ suratMasuk.from }}</span>
+                                to
+                                <span class="font-medium">{{ suratMasuk.to }}</span>
+                                of
+                                <span class="font-medium">{{ suratMasuk.total }}</span>
+                                results
+                            </p>
+                        </div>
+                        <Pagination :links="suratMasuk.links" />
+                    </div>
+                </div>
+
                 <!-- Empty State -->
-                <div v-if="filteredAndSortedSuratMasuk.length === 0"
+                <div v-if="filteredSuratMasuk.length === 0"
                     class="text-center py-12 bg-white rounded-lg shadow mt-6"
                 >
                     <EnvelopeIcon class="mx-auto h-12 w-12 text-gray-400" />
@@ -603,7 +683,7 @@ onBeforeUnmount(() => {
                             </div>
                         </div>
 
-                        <!-- Preview for both methods -->
+                        <!-- Preview -->
                         <div v-if="previewUrl" class="mt-3">
                             <img
                                 :src="previewUrl"
@@ -625,8 +705,7 @@ onBeforeUnmount(() => {
                     :disabled="createForm.processing"
                     @click="submitCreate"
                 >
-                    <span v-if="createForm.processing">Menyimpan...</span>
-                    <span v-else>Simpan</span>
+                    {{ createForm.processing ? 'Menyimpan...' : 'Simpan' }}
                 </PrimaryButton>
             </template>
         </Modal>
@@ -694,8 +773,7 @@ onBeforeUnmount(() => {
                     :disabled="editForm.processing"
                     @click="submitEdit"
                 >
-                    <span v-if="editForm.processing">Menyimpan...</span>
-                    <span v-else>Simpan</span>
+                    {{ editForm.processing ? 'Menyimpan...' : 'Simpan' }}
                 </PrimaryButton>
             </template>
         </Modal>
@@ -710,7 +788,7 @@ onBeforeUnmount(() => {
 
                 <div>
                     <h4 class="text-sm font-medium text-gray-500">Tanggal Surat</h4>
-                    <p class="mt-1 text-sm text-gray-900">{{ formatDate(selectedSurat.tgl_no_asal) }}</p>
+                    <p class="mt-1 text-sm text-gray-900">{{ formatDate(selectedSurat.tgl_ns) }}</p>
                 </div>
 
                 <div>
@@ -728,11 +806,11 @@ onBeforeUnmount(() => {
                     <p class="mt-1 text-sm text-gray-900">{{ selectedSurat.perihal }}</p>
                 </div>
 
-                <div v-if="selectedSurat.lampiran">
+                <div v-if="selectedSurat.lampiran && selectedSurat.lampiran.length > 0">
                     <h4 class="text-sm font-medium text-gray-500">Lampiran</h4>
                     <div class="mt-1 flex items-center space-x-2">
                         <DocumentIcon class="h-5 w-5 text-gray-400" />
-                        <span class="text-sm text-gray-900">{{ selectedSurat.lampiran.nama_berkas }}</span>
+                        <span class="text-sm text-gray-900">{{ selectedSurat.lampiran[0].nama_berkas }}</span>
                         <a
                             :href="route('surat-masuk.download-lampiran', selectedSurat.id)"
                             class="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
@@ -751,6 +829,7 @@ onBeforeUnmount(() => {
                 </SecondaryButton>
             </template>
         </Modal>
+
         <!-- Delete Confirmation Modal -->
         <Modal :show="showDeleteModal" title="Konfirmasi Hapus" @close="showDeleteModal = false">
             <div class="p-6">

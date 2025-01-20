@@ -55,23 +55,39 @@ class SuratMasukController extends Controller
      * Display a listing of incoming letters.
      * Shows different views based on user role.
      */
-    public function index()
+    public function index(Request $request)
     {
         $this->authorize('viewAny', SuratMasuk::class);
 
         $user = User::find(Auth::id());
         $isSekdes = $this->isSekdes();
+        
+        $perPage = $request->input('per_page', 10);
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
 
-        $suratMasuk = SuratMasuk::with(['user', 'lampiran'])
+        $query = SuratMasuk::with(['user', 'lampiran'])
             ->when(!$isSekdes, function ($query) use ($user) {
                 return $query->where('user_id', $user->id);
             })
-            ->orderBy('id', 'DESC')
-            ->get();
+            ->when($startDate, function ($query) use ($startDate) {
+                return $query->whereDate('tgl_sm', '>=', $startDate);
+            })
+            ->when($endDate, function ($query) use ($endDate) {
+                return $query->whereDate('tgl_sm', '<=', $endDate);
+            })
+            ->orderBy('id', 'DESC');
+
+        $suratMasuk = $query->paginate($perPage);
 
         return Inertia::render('SuratMasuk/Index', [
             'suratMasuk' => $suratMasuk,
-            'permissions' => $this->checkPermissions()
+            'permissions' => $this->checkPermissions(),
+            'filters' => [
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'per_page' => $perPage
+            ]
         ]);
     }
 

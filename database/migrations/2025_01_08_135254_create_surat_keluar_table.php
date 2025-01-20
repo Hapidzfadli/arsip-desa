@@ -18,7 +18,6 @@ return new class extends Migration
             $table->text('pengirim')->nullable();
             $table->text('penerima')->nullable();
             $table->text('perihal')->nullable();
-            $table->foreignId('bagian_id')->constrained('bagian')->onDelete('cascade');
             $table->string('token_lampiran')->nullable();
             $table->foreignId('user_id')->nullable()->constrained('users')->onDelete('set null');
             $table->boolean('dibaca')->default(false);
